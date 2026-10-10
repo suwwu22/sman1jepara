@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #ffffff;
+  color: #1e293b;
+}
+
+h3 {
+  font-family: ui-sans-serif, system-ui, "Segoe UI", Arial, sans-serif;
+}
