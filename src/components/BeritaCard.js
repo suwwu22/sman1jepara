@@ -1,17 +1,11 @@
-import Image from "next/image";
 import Link from "next/link";
+import NewsImage from "@/components/NewsImage";
 
 export default function BeritaCard({ id, title, date, category, image, excerpt }) {
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition duration-300 hover:shadow-lg">
       <div className="relative h-48 w-full bg-blue-50">
-        <Image
-          src={image}
-          alt={title}
-          fill
-          sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-          className="object-cover"
-        />
+        <NewsImage src={image} alt={title} className="absolute inset-0 h-full w-full object-cover" />
       </div>
       <div className="flex flex-1 flex-col p-5">
         <div className="flex items-center justify-between gap-2 text-xs">

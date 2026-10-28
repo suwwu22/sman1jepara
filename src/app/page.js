@@ -2,8 +2,8 @@ import Link from "next/link";
 import Hero from "@/components/Hero";
 import SectionTitle from "@/components/SectionTitle";
 import StatCard from "@/components/StatCard";
-import BeritaCard from "@/components/BeritaCard";
-import berita from "@/data/berita";
+import VisiCard from "@/components/VisiCard";
+import BeritaTerbaru from "@/components/BeritaTerbaru";
 
 const statistik = [
   { value: "1.184", label: "Siswa Aktif" },
@@ -21,8 +21,6 @@ const sorotan = [
 ];
 
 export default function Home() {
-  const terbaru = berita.slice(0, 3);
-
   return (
     <>
       <Hero />
@@ -42,13 +40,7 @@ export default function Home() {
               Selengkapnya
             </Link>
           </div>
-          <div className="rounded-2xl bg-blue-50 p-6">
-            <h3 className="font-bold text-blue-900">Visi Sekolah</h3>
-            <p className="mt-2 leading-relaxed text-slate-700">
-              Terwujudnya lulusan yang bertakwa kepada Tuhan Yang Maha Esa, unggul dalam prestasi, kreatif,
-              santun, dan berwawasan global.
-            </p>
-          </div>
+          <VisiCard />
         </div>
       </section>
 
@@ -65,11 +57,7 @@ export default function Home() {
 
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
         <SectionTitle title="Berita Terbaru" subtitle="Kabar terkini dari lingkungan sekolah." />
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {terbaru.map((b) => (
-            <BeritaCard key={b.id} {...b} />
-          ))}
-        </div>
+        <BeritaTerbaru limit={3} />
         <div className="mt-10 text-center">
           <Link
             href="/berita"
