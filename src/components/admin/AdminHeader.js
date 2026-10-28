@@ -37,7 +37,7 @@ export default function AdminHeader({ onMenu, onLogout }) {
       <div className="flex items-center gap-3">
         <div className="hidden text-right sm:block">
           <p className="text-sm font-semibold text-slate-900">{settings.displayName}</p>
-          <p className="text-xs text-slate-500">@{session?.username}</p>
+          <p className="text-xs text-slate-500">{session?.email}</p>
         </div>
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-700 text-sm font-bold text-white" aria-hidden="true">
           {settings.displayName.charAt(0).toUpperCase()}

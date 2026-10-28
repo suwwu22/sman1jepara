@@ -1,14 +1,87 @@
 "use client";
 
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { CHANGE_EVENT, KEYS, parseJSON } from "@/lib/storage";
-import { buildSeedNews, ensureSeedNews } from "@/lib/news";
 import { mergeProfile } from "@/lib/profile";
 import { DEFAULT_SETTINGS } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
+import { fetchAllNews, fetchPublishedNews, fetchPublishedNewsById } from "@/lib/news";
 
-// Hook ini membaca localStorage lewat useSyncExternalStore:
-// - di server nilainya "undefined" (belum siap), sehingga tidak ada hydration error;
-// - setiap saveData/removeData memicu event sehingga semua komponen ikut diperbarui.
+// ---------- Data dari Supabase ----------
+function useRemote(load) {
+  const [state, setState] = useState({ data: null, ready: false, error: null });
+  const [tick, setTick] = useState(0);
+  const reload = useCallback(() => setTick((t) => t + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    load().then(({ data, error }) => {
+      if (!cancelled) setState({ data, ready: true, error });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load, tick]);
+
+  return { ...state, reload };
+}
+
+// Berita published untuk halaman publik.
+export function usePublishedNews(limit) {
+  const load = useCallback(() => fetchPublishedNews(limit), [limit]);
+  const { data, ready, error, reload } = useRemote(load);
+  return { news: data ?? [], ready, error, reload };
+}
+
+// Satu berita published berdasarkan id (halaman detail).
+export function usePublishedNewsItem(id) {
+  const load = useCallback(() => fetchPublishedNewsById(id), [id]);
+  const { data, ready, error } = useRemote(load);
+  return { item: data, ready, error };
+}
+
+// Semua berita untuk admin (butuh login; diatur oleh RLS).
+export function useAdminNews() {
+  const { data, ready, error, reload } = useRemote(fetchAllNews);
+  return { news: data ?? [], ready, error, reload };
+}
+
+// ---------- Session Supabase Auth ----------
+function toSession(s) {
+  if (!s || !s.user) return null;
+  return {
+    authenticated: true,
+    username: s.user.email,
+    email: s.user.email,
+    loggedInAt: s.user.last_sign_in_at,
+  };
+}
+
+export function useSession() {
+  const [state, setState] = useState({ session: null, ready: false });
+
+  useEffect(() => {
+    if (!supabase) {
+      Promise.resolve().then(() => setState({ session: null, ready: true }));
+      return undefined;
+    }
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (active) setState({ session: toSession(data.session), ready: true });
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setState({ session: toSession(session), ready: true });
+    });
+    return () => {
+      active = false;
+      data.subscription.unsubscribe();
+    };
+  }, []);
+
+  return state;
+}
+
+// ---------- Data lokal (localStorage): profil, pengaturan, log ----------
 function subscribe(callback) {
   window.addEventListener(CHANGE_EVENT, callback);
   window.addEventListener("storage", callback);
@@ -32,22 +105,6 @@ function useRaw(key) {
   );
 }
 
-export function useNews() {
-  const raw = useRaw(KEYS.news);
-  const ready = raw !== undefined;
-  const stored = useMemo(() => {
-    const parsed = parseJSON(raw);
-    return Array.isArray(parsed) ? parsed : null;
-  }, [raw]);
-
-  useEffect(() => {
-    if (ready && stored === null) ensureSeedNews();
-  }, [ready, stored]);
-
-  const news = useMemo(() => stored ?? (ready ? buildSeedNews() : []), [stored, ready]);
-  return { news, ready };
-}
-
 export function useProfile() {
   const raw = useRaw(KEYS.profile);
   const ready = raw !== undefined;
@@ -57,18 +114,6 @@ export function useProfile() {
   }, [raw]);
   const profile = useMemo(() => mergeProfile(stored), [stored]);
   return { profile, ready, customized: stored !== null };
-}
-
-export function useSession() {
-  const raw = useRaw(KEYS.session);
-  const ready = raw !== undefined;
-  const session = useMemo(() => {
-    const parsed = parseJSON(raw);
-    return parsed && parsed.authenticated === true && typeof parsed.username === "string"
-      ? parsed
-      : null;
-  }, [raw]);
-  return { session, ready };
 }
 
 export function useAdminSettings() {

@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import NewsImage from "@/components/NewsImage";
-import { useNews } from "@/lib/hooks";
-import { CATEGORIES, STATUS, isSlugTaken, slugify, todayISO, toIndoDate } from "@/lib/news";
+import { CATEGORIES, STATUS, slugify, todayISO, toIndoDate } from "@/lib/news";
 
 const LOCAL_IMAGES = [
   "/sekolah.jpg",
@@ -14,16 +13,12 @@ const LOCAL_IMAGES = [
   "/berita/berita-5.jpg",
   "/berita/berita-6.jpg",
 ];
-const MAX_FILE = 500 * 1024; // 500 KB
-const TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const inputCls =
   "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition duration-200 focus:border-blue-600 focus:ring-2 focus:ring-blue-100";
 
 function detectMode(img) {
-  if (!img) return "lokal";
-  if (img.startsWith("data:")) return "upload";
-  if (LOCAL_IMAGES.includes(img)) return "lokal";
+  if (!img || LOCAL_IMAGES.includes(img)) return "lokal";
   return "url";
 }
 
@@ -39,7 +34,6 @@ function Field({ label, htmlFor, error, hint, children }) {
 }
 
 export default function NewsForm({ mode, initial, onSubmit, onCancel }) {
-  const { news } = useNews();
   const [title, setTitle] = useState(initial?.title ?? "");
   const [slug, setSlug] = useState(initial?.id ?? "");
   const [slugTouched, setSlugTouched] = useState(false);
@@ -52,6 +46,7 @@ export default function NewsForm({ mode, initial, onSubmit, onCancel }) {
   const [image, setImage] = useState(initial?.image ?? "/sekolah.jpg");
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const changeTitle = (value) => {
     setTitle(value);
@@ -64,54 +59,33 @@ export default function NewsForm({ mode, initial, onSubmit, onCancel }) {
     setErrors((e) => ({ ...e, image: undefined }));
   };
 
-  const handleFile = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!TYPES.includes(file.type)) {
-      setErrors((e) => ({ ...e, image: "Format harus JPEG, PNG, atau WebP." }));
-      return;
-    }
-    if (file.size > MAX_FILE) {
-      setErrors((e) => ({ ...e, image: "Ukuran gambar maksimal 500 KB." }));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImage(String(reader.result));
-      setErrors((e) => ({ ...e, image: undefined }));
-    };
-    reader.onerror = () => setErrors((e) => ({ ...e, image: "Gagal membaca file gambar." }));
-    reader.readAsDataURL(file);
-  };
-
   const validate = () => {
     const err = {};
     if (title.trim().length < 5) err.title = "Judul minimal 5 karakter.";
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
       err.slug = "Slug hanya huruf kecil, angka, dan tanda hubung.";
-    } else if (isSlugTaken(slug, initial?.id ?? null, news)) {
-      err.slug = "Slug sudah dipakai berita lain.";
     }
     if (!category) err.category = "Pilih kategori.";
     if (!dateISO) err.dateISO = "Tanggal wajib diisi.";
     if (!excerpt.trim()) err.excerpt = "Ringkasan wajib diisi.";
     else if (excerpt.length > 200) err.excerpt = "Ringkasan maksimal 200 karakter.";
     if (content.trim().length < 30) err.content = "Isi berita minimal 30 karakter.";
-    if (!image) err.image = imageMode === "upload" ? "Pilih file gambar." : "Gambar wajib diisi.";
+    if (!image) err.image = "Gambar wajib diisi.";
     else if (imageMode === "url" && !/^(https?:\/\/|\/)/.test(image)) {
       err.image = "URL harus diawali http://, https://, atau /.";
     }
     return err;
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const err = validate();
     setErrors(err);
     setFormError("");
     if (Object.keys(err).length > 0) return;
 
-    const result = onSubmit({
+    setSaving(true);
+    const result = await onSubmit({
       id: slug,
       title: title.trim(),
       date: toIndoDate(dateISO),
@@ -121,8 +95,8 @@ export default function NewsForm({ mode, initial, onSubmit, onCancel }) {
       excerpt: excerpt.trim(),
       content: content.trim(),
       status,
-      createdAt: initial?.createdAt ?? new Date().toISOString(),
     });
+    setSaving(false);
     if (result && !result.ok) setFormError(result.error);
   };
 
@@ -181,7 +155,6 @@ export default function NewsForm({ mode, initial, onSubmit, onCancel }) {
           {[
             ["lokal", "Gambar lokal (folder public)"],
             ["url", "URL gambar"],
-            ["upload", "Upload file (maks. 500 KB)"],
           ].map(([value, label]) => (
             <label key={value} className="flex items-center gap-2">
               <input type="radio" name="imageMode" checked={imageMode === value} onChange={() => changeImageMode(value)} />
@@ -190,23 +163,16 @@ export default function NewsForm({ mode, initial, onSubmit, onCancel }) {
           ))}
         </div>
 
-        {imageMode === "lokal" && (
+        {imageMode === "lokal" ? (
           <select aria-label="Gambar lokal" value={image} onChange={(e) => setImage(e.target.value)} className={inputCls}>
             {LOCAL_IMAGES.map((src) => (
               <option key={src} value={src}>{src}</option>
             ))}
           </select>
-        )}
-        {imageMode === "url" && (
+        ) : (
           <input aria-label="URL gambar" placeholder="https://..." value={image} onChange={(e) => setImage(e.target.value)} className={inputCls} />
         )}
-        {imageMode === "upload" && (
-          <input aria-label="File gambar" type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFile} className="block w-full text-sm text-slate-600" />
-        )}
         {errors.image && <p className="text-xs text-red-600">{errors.image}</p>}
-        <p className="text-xs text-slate-500">
-          Gambar upload disimpan sebagai Data URL di localStorage browser ini, bukan di server.
-        </p>
         {image && (
           <NewsImage key={image} src={image} alt="Pratinjau gambar berita" className="h-40 w-full max-w-sm rounded-lg border border-slate-200 object-cover" />
         )}
@@ -220,8 +186,12 @@ export default function NewsForm({ mode, initial, onSubmit, onCancel }) {
       </Field>
 
       <div className="flex gap-3 pt-2">
-        <button type="submit" className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white transition duration-200 hover:bg-blue-800">
-          {mode === "edit" ? "Simpan Perubahan" : "Simpan Berita"}
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white transition duration-200 hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {saving ? "Menyimpan..." : mode === "edit" ? "Simpan Perubahan" : "Simpan Berita"}
         </button>
         <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 transition duration-200 hover:bg-slate-50">
           Batal

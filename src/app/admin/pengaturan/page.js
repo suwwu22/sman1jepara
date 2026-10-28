@@ -3,9 +3,9 @@
 import { useState } from "react";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import { useToast } from "@/components/admin/Toast";
-import { DEMO_ADMIN, saveSettings } from "@/lib/auth";
+import { saveSettings } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
-import { useAdminSettings } from "@/lib/hooks";
+import { useAdminSettings, useSession } from "@/lib/hooks";
 import { KEYS, removeData } from "@/lib/storage";
 
 const inputCls =
@@ -43,14 +43,15 @@ function SettingsForm({ initialName }) {
 
 export default function AdminPengaturanPage() {
   const settings = useAdminSettings();
+  const { session } = useSession();
   const { showToast } = useToast();
   const [confirmReset, setConfirmReset] = useState(false);
 
-  const handleResetAll = () => {
-    [KEYS.news, KEYS.profile, KEYS.activity, KEYS.settings].forEach(removeData);
-    logActivity("RESET_DATA", "Mereset seluruh data simulasi ke data awal");
+  const handleResetLocal = () => {
+    [KEYS.profile, KEYS.activity, KEYS.settings].forEach(removeData);
+    logActivity("RESET_DATA", "Mereset data lokal (profil, pengaturan, log)");
     setConfirmReset(false);
-    showToast("Seluruh data simulasi dikembalikan ke data awal.");
+    showToast("Data lokal dikembalikan ke data awal.");
   };
 
   return (
@@ -58,35 +59,36 @@ export default function AdminPengaturanPage() {
       <SettingsForm key={settings.displayName} initialName={settings.displayName} />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-        <h2 className="font-bold text-slate-900">Informasi Akun Demo</h2>
+        <h2 className="font-bold text-slate-900">Akun Admin</h2>
         <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm text-slate-700">
-          <dt className="font-semibold">Username</dt>
-          <dd><code>{DEMO_ADMIN.username}</code></dd>
-          <dt className="font-semibold">Password</dt>
-          <dd><code>{DEMO_ADMIN.password}</code></dd>
+          <dt className="font-semibold">Email</dt>
+          <dd>{session?.email}</dd>
+          <dt className="font-semibold">Autentikasi</dt>
+          <dd>Supabase Authentication</dd>
         </dl>
         <p className="mt-3 text-xs leading-relaxed text-slate-500">
-          Autentikasi ini hanya simulasi di sisi klien. Kredensial berada di kode frontend sehingga tidak aman untuk
-          produksi. Seluruh data disimpan di localStorage browser ini saja.
+          Data berita disimpan di database Supabase. Profil sekolah, pengaturan tampilan, dan log aktivitas
+          masih disimpan di localStorage browser ini.
         </p>
       </section>
 
       <section className="rounded-xl border border-red-200 bg-white p-5 shadow-sm sm:p-6">
-        <h2 className="font-bold text-red-700">Reset Data Simulasi</h2>
+        <h2 className="font-bold text-red-700">Reset Data Lokal</h2>
         <p className="mt-2 text-sm text-slate-600">
-          Menghapus semua perubahan berita, profil, pengaturan, dan log aktivitas, lalu mengembalikannya ke data awal.
+          Menghapus perubahan profil sekolah, pengaturan tampilan, dan log aktivitas di browser ini. Data berita di
+          Supabase tidak ikut terhapus.
         </p>
         <button type="button" onClick={() => setConfirmReset(true)} className="mt-4 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition duration-200 hover:bg-red-700">
-          Reset Semua Data
+          Reset Data Lokal
         </button>
       </section>
 
       <ConfirmDialog
         open={confirmReset}
-        title="Reset seluruh data simulasi?"
-        message="Berita yang Anda tambah, edit, atau hapus serta perubahan profil akan hilang dan kembali ke data awal. Tindakan ini tidak dapat dibatalkan."
+        title="Reset data lokal?"
+        message="Perubahan profil, pengaturan tampilan, dan log aktivitas di browser ini akan hilang. Berita di Supabase tidak terpengaruh."
         confirmLabel="Ya, reset"
-        onConfirm={handleResetAll}
+        onConfirm={handleResetLocal}
         onCancel={() => setConfirmReset(false)}
       />
     </div>

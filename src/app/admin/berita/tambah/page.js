@@ -9,15 +9,13 @@ export default function TambahBeritaPage() {
   const router = useRouter();
   const { showToast } = useToast();
 
-  const handleSubmit = (values) => {
-    const result = addNews(values);
+  const handleSubmit = async (values) => {
+    const result = await addNews(values);
     if (result.ok) {
       showToast("Berita berhasil ditambahkan.");
       router.push("/admin/berita");
-    } else {
-      showToast(result.error, "error");
     }
-    return result;
+    return result; // jika gagal, pesan error ditampilkan di dalam form
   };
 
   return <NewsForm mode="add" onSubmit={handleSubmit} onCancel={() => router.push("/admin/berita")} />;

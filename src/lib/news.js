@@ -1,9 +1,10 @@
-import seed from "@/data/berita";
-import { KEYS, readData, saveData } from "@/lib/storage";
+import { supabase, CONFIG_ERROR } from "@/lib/supabase";
 import { logActivity } from "@/lib/activity";
 
 export const CATEGORIES = ["Berita Sekolah", "Kegiatan Ekstrakurikuler", "Prestasi Siswa"];
 export const STATUS = { DRAFT: "draft", PUBLISHED: "published" };
+
+const TABLE = "berita";
 
 const BULAN = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -44,89 +45,108 @@ export function slugify(text) {
     .replace(/-+$/g, "");
 }
 
-// Data statis src/data/berita.js dipakai sebagai data awal (seed).
-export function buildSeedNews() {
-  return seed.map((b) => {
-    const dateISO = fromIndoDate(b.date);
-    return {
-      id: b.id,
-      title: b.title,
-      date: b.date,
-      dateISO,
-      category: b.category,
-      image: b.image,
-      excerpt: b.excerpt,
-      content: Array.isArray(b.content) ? b.content.join("\n\n") : String(b.content),
-      status: STATUS.PUBLISHED,
-      createdAt: dateISO,
-    };
-  });
-}
-
-// Salin seed ke localStorage hanya jika key belum ada (atau JSON rusak).
-export function ensureSeedNews() {
-  if (!Array.isArray(readData(KEYS.news, null))) {
-    saveData(KEYS.news, buildSeedNews());
-  }
-}
-
-export function getNews() {
-  const data = readData(KEYS.news, null);
-  return Array.isArray(data) ? data : buildSeedNews();
-}
-
 export function sortNews(list) {
   return [...list].sort((a, b) => (b.dateISO || "").localeCompare(a.dateISO || ""));
 }
 
-export function publishedNews(list) {
-  return sortNews(list.filter((n) => n.status === STATUS.PUBLISHED));
+// Baris database (snake_case) -> objek aplikasi
+export function fromRow(r) {
+  return {
+    id: r.id,
+    title: r.title,
+    dateISO: r.date_iso,
+    date: toIndoDate(r.date_iso),
+    category: r.category,
+    image: r.image,
+    excerpt: r.excerpt,
+    content: r.content,
+    status: r.status,
+    createdAt: r.created_at,
+  };
 }
 
-export function isSlugTaken(slug, excludeId, list) {
-  return list.some((n) => n.id === slug && n.id !== excludeId);
+// Objek aplikasi -> baris database (tanpa id dan created_at)
+export function toRow(item) {
+  return {
+    title: item.title,
+    date_iso: item.dateISO,
+    category: item.category,
+    image: item.image,
+    excerpt: item.excerpt,
+    content: item.content,
+    status: item.status,
+  };
 }
 
-export function addNews(item) {
-  const current = getNews();
-  if (isSlugTaken(item.id, null, current)) {
-    return { ok: false, error: "Slug sudah dipakai berita lain." };
+const orderBy = (query) =>
+  query.order("date_iso", { ascending: false }).order("created_at", { ascending: false });
+
+// Admin (sudah login) melihat semua berita; pengunjung hanya melihat yang published (diatur RLS).
+export async function fetchAllNews() {
+  if (!supabase) return { data: [], error: CONFIG_ERROR };
+  const { data, error } = await orderBy(supabase.from(TABLE).select("*"));
+  return error ? { data: [], error: error.message } : { data: data.map(fromRow), error: null };
+}
+
+export async function fetchPublishedNews(limit) {
+  if (!supabase) return { data: [], error: CONFIG_ERROR };
+  let query = orderBy(supabase.from(TABLE).select("*").eq("status", STATUS.PUBLISHED));
+  if (limit) query = query.limit(limit);
+  const { data, error } = await query;
+  return error ? { data: [], error: error.message } : { data: data.map(fromRow), error: null };
+}
+
+export async function fetchPublishedNewsById(id) {
+  if (!supabase) return { data: null, error: CONFIG_ERROR };
+  const { data, error } = await supabase
+    .from(TABLE)
+    .select("*")
+    .eq("id", id)
+    .eq("status", STATUS.PUBLISHED)
+    .maybeSingle();
+  if (error) return { data: null, error: error.message };
+  return { data: data ? fromRow(data) : null, error: null };
+}
+
+export async function addNews(item) {
+  if (!supabase) return { ok: false, error: CONFIG_ERROR };
+  const { error } = await supabase.from(TABLE).insert({ id: item.id, ...toRow(item) });
+  if (error) {
+    return {
+      ok: false,
+      error: error.code === "23505" ? "Slug sudah dipakai berita lain." : `Gagal menyimpan: ${error.message}`,
+    };
   }
-  const result = saveData(KEYS.news, [item, ...current]);
-  if (result.ok) logActivity("CREATE_NEWS", `Menambahkan berita "${item.title}"`);
-  return result;
+  logActivity("CREATE_NEWS", `Menambahkan berita "${item.title}"`);
+  return { ok: true };
 }
 
-export function updateNews(id, changes) {
-  const current = getNews();
-  const index = current.findIndex((n) => n.id === id);
-  if (index === -1) return { ok: false, error: "Berita tidak ditemukan." };
-  const next = [...current];
-  next[index] = { ...current[index], ...changes, id };
-  const result = saveData(KEYS.news, next);
-  if (result.ok) logActivity("UPDATE_NEWS", `Mengedit berita "${next[index].title}"`);
-  return result;
-}
-
-export function setNewsStatus(id, status) {
-  const current = getNews();
-  const index = current.findIndex((n) => n.id === id);
-  if (index === -1) return { ok: false, error: "Berita tidak ditemukan." };
-  const next = [...current];
-  next[index] = { ...current[index], status };
-  const result = saveData(KEYS.news, next);
-  if (result.ok) {
-    const label = status === STATUS.PUBLISHED ? "Published" : "Draft";
-    logActivity("STATUS_NEWS", `Mengubah status "${next[index].title}" menjadi ${label}`);
+export async function updateNews(id, values) {
+  if (!supabase) return { ok: false, error: CONFIG_ERROR };
+  const { data, error } = await supabase.from(TABLE).update(toRow(values)).eq("id", id).select("id");
+  if (error) return { ok: false, error: `Gagal memperbarui: ${error.message}` };
+  if (!data || data.length === 0) {
+    return { ok: false, error: "Gagal memperbarui: berita tidak ditemukan atau Anda belum login." };
   }
-  return result;
+  logActivity("UPDATE_NEWS", `Mengedit berita "${values.title}"`);
+  return { ok: true };
 }
 
-export function deleteNews(id) {
-  const current = getNews();
-  const target = current.find((n) => n.id === id);
-  if (!target) return { ok: false, error: "Berita tidak ditemukan." };
-  const result = saveData(KEYS.news, current.filter((n) => n.id !== id));
-  if (result.ok) logActivity("DELETE_NEWS", `Menghapus berita "${target.title}"`);
-  return result;
+export async function setNewsStatus(item, status) {
+  if (!supabase) return { ok: false, error: CONFIG_ERROR };
+  const { data, error } = await supabase.from(TABLE).update({ status }).eq("id", item.id).select("id");
+  if (error) return { ok: false, error: `Gagal mengubah status: ${error.message}` };
+  if (!data || data.length === 0) return { ok: false, error: "Gagal mengubah status: tidak ada izin." };
+  const label = status === STATUS.PUBLISHED ? "Published" : "Draft";
+  logActivity("STATUS_NEWS", `Mengubah status "${item.title}" menjadi ${label}`);
+  return { ok: true };
+}
+
+export async function deleteNews(item) {
+  if (!supabase) return { ok: false, error: CONFIG_ERROR };
+  const { data, error } = await supabase.from(TABLE).delete().eq("id", item.id).select("id");
+  if (error) return { ok: false, error: `Gagal menghapus: ${error.message}` };
+  if (!data || data.length === 0) return { ok: false, error: "Gagal menghapus: tidak ada izin." };
+  logActivity("DELETE_NEWS", `Menghapus berita "${item.title}"`);
+  return { ok: true };
 }

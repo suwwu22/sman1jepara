@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import AdminStatCard from "@/components/admin/AdminStatCard";
-import { useActivities, useAdminSettings, useNews, useProfile, useSession } from "@/lib/hooks";
+import { useActivities, useAdminNews, useAdminSettings, useProfile, useSession } from "@/lib/hooks";
 import { STATUS, sortNews } from "@/lib/news";
 
 export default function AdminDashboardPage() {
-  const { news } = useNews();
+  const { news, error } = useAdminNews();
   const { customized } = useProfile();
   const activities = useActivities();
   const { session } = useSession();
@@ -24,7 +24,7 @@ export default function AdminDashboardPage() {
         <div>
           <h2 className="text-lg font-bold text-slate-900">Selamat datang, {settings.displayName}</h2>
           <p className="text-sm text-slate-500">
-            Login sebagai @{session?.username} sejak{" "}
+            Login sebagai {session?.email} sejak{" "}
             {session?.loggedInAt ? new Date(session.loggedInAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) : "-"}
           </p>
         </div>
@@ -37,6 +37,12 @@ export default function AdminDashboardPage() {
           </Link>
         </div>
       </div>
+
+      {error && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+          Data berita tidak dapat dimuat. {error}
+        </p>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <AdminStatCard label="Total Berita" value={news.length} />

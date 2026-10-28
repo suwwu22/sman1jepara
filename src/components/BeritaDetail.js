@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import NewsImage from "@/components/NewsImage";
-import { useNews } from "@/lib/hooks";
-import { STATUS } from "@/lib/news";
+import { usePublishedNewsItem } from "@/lib/hooks";
 
-function TidakDitemukan() {
+function TidakDitemukan({ pesan = "Berita yang Anda cari tidak tersedia." }) {
   return (
     <div className="mx-auto max-w-xl px-4 py-24 text-center">
       <h1 className="text-3xl font-bold text-blue-900">Halaman tidak ditemukan</h1>
-      <p className="mt-3 text-slate-600">Berita yang Anda cari tidak tersedia.</p>
+      <p className="mt-3 text-slate-600">{pesan}</p>
       <Link href="/berita" className="mt-6 inline-block rounded-full bg-blue-700 px-6 py-3 font-semibold text-white hover:bg-blue-800">
         Kembali ke Berita
       </Link>
@@ -18,18 +17,15 @@ function TidakDitemukan() {
 }
 
 export default function BeritaDetail({ id }) {
-  const { news, ready } = useNews();
+  const { item, ready, error } = usePublishedNewsItem(id);
 
   if (!ready) {
     return <div className="mx-auto max-w-3xl px-4 py-12" aria-busy="true"><div className="h-96 animate-pulse rounded-2xl bg-slate-100" /></div>;
   }
+  if (error) return <TidakDitemukan pesan={`Berita tidak dapat dimuat. ${error}`} />;
+  if (!item) return <TidakDitemukan />;
 
-  const item = news.find((n) => n.id === id);
-  if (!item || item.status !== STATUS.PUBLISHED) return <TidakDitemukan />;
-
-  const paragraphs = (Array.isArray(item.content) ? item.content.join("\n\n") : String(item.content))
-    .split(/\n{2,}/)
-    .filter(Boolean);
+  const paragraphs = String(item.content).split(/\n{2,}/).filter(Boolean);
 
   return (
     <article className="mx-auto max-w-3xl px-4 py-12 sm:px-6">

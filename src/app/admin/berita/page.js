@@ -5,14 +5,14 @@ import Link from "next/link";
 import NewsTable from "@/components/admin/NewsTable";
 import ConfirmDialog from "@/components/admin/ConfirmDialog";
 import { useToast } from "@/components/admin/Toast";
-import { useNews } from "@/lib/hooks";
+import { useAdminNews } from "@/lib/hooks";
 import { CATEGORIES, STATUS, deleteNews, setNewsStatus, sortNews } from "@/lib/news";
 
 const filterCls =
   "rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-100";
 
 export default function AdminBeritaPage() {
-  const { news, ready } = useNews();
+  const { news, ready, error, reload } = useAdminNews();
   const { showToast } = useToast();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
@@ -35,24 +35,39 @@ export default function AdminBeritaPage() {
     [news, search, category, status]
   );
 
-  const handleToggle = (item) => {
+  const handleToggle = async (item) => {
     const next = item.status === STATUS.PUBLISHED ? STATUS.DRAFT : STATUS.PUBLISHED;
-    const result = setNewsStatus(item.id, next);
-    if (result.ok) showToast(next === STATUS.PUBLISHED ? "Berita dipublikasikan." : "Berita dijadikan draft.");
-    else showToast(result.error, "error");
+    const result = await setNewsStatus(item, next);
+    if (result.ok) {
+      showToast(next === STATUS.PUBLISHED ? "Berita dipublikasikan." : "Berita dijadikan draft.");
+      reload();
+    } else {
+      showToast(result.error, "error");
+    }
   };
 
-  const confirmDelete = () => {
-    const result = deleteNews(toDelete.id);
-    if (result.ok) showToast("Berita berhasil dihapus.");
-    else showToast(result.error, "error");
+  const confirmDelete = async () => {
+    const target = toDelete;
     setToDelete(null);
+    const result = await deleteNews(target);
+    if (result.ok) {
+      showToast("Berita berhasil dihapus.");
+      reload();
+    } else {
+      showToast(result.error, "error");
+    }
   };
 
   if (!ready) return <p className="text-sm text-slate-500">Memuat data...</p>;
 
   return (
     <div className="space-y-4">
+      {error && (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+          Data berita tidak dapat dimuat. {error}
+        </p>
+      )}
+
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row">
           <input
@@ -91,7 +106,7 @@ export default function AdminBeritaPage() {
       <ConfirmDialog
         open={Boolean(toDelete)}
         title="Hapus berita?"
-        message={toDelete ? `Berita "${toDelete.title}" akan dihapus dan tidak lagi muncul di website publik.` : ""}
+        message={toDelete ? `Berita "${toDelete.title}" akan dihapus permanen dan tidak lagi muncul di website publik.` : ""}
         onConfirm={confirmDelete}
         onCancel={() => setToDelete(null)}
       />

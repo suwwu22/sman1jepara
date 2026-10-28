@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { DEMO_ADMIN, login } from "@/lib/auth";
+import { login } from "@/lib/auth";
 import { useSession } from "@/lib/hooks";
 
 const inputCls =
@@ -12,7 +12,7 @@ const inputCls =
 export default function AdminLoginPage() {
   const router = useRouter();
   const { session, ready } = useSession();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
@@ -24,25 +24,24 @@ export default function AdminLoginPage() {
     if (ready && session) router.replace("/admin");
   }, [ready, session, router]);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const err = {};
-    if (!username.trim()) err.username = "Username wajib diisi.";
+    if (!email.trim()) err.email = "Email wajib diisi.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) err.email = "Format email tidak valid.";
     if (!password) err.password = "Password wajib diisi.";
     setErrors(err);
     setFormError("");
     if (Object.keys(err).length > 0) return;
 
     setLoading(true);
-    setTimeout(() => {
-      const result = login(username, password);
-      if (result.ok) {
-        router.replace("/admin");
-      } else {
-        setFormError(result.error);
-        setLoading(false);
-      }
-    }, 400);
+    const result = await login(email, password);
+    if (result.ok) {
+      router.replace("/admin");
+    } else {
+      setFormError(result.error);
+      setLoading(false);
+    }
   };
 
   return (
@@ -60,9 +59,9 @@ export default function AdminLoginPage() {
           )}
 
           <div>
-            <label htmlFor="username" className="text-sm font-semibold text-slate-700">Username</label>
-            <input id="username" autoComplete="username" value={username} onChange={(e) => setUsername(e.target.value)} className={inputCls} />
-            {errors.username && <p className="mt-1 text-xs text-red-600">{errors.username}</p>}
+            <label htmlFor="email" className="text-sm font-semibold text-slate-700">Email</label>
+            <input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} />
+            {errors.email && <p className="mt-1 text-xs text-red-600">{errors.email}</p>}
           </div>
 
           <div>
@@ -74,7 +73,7 @@ export default function AdminLoginPage() {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={`${inputCls} pr-20`}
+                className={`${inputCls} pr-24`}
               />
               <button
                 type="button"
@@ -96,12 +95,9 @@ export default function AdminLoginPage() {
           </button>
         </form>
 
-        <div className="mt-6 rounded-lg bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
-          <p className="font-semibold text-slate-700">Akun demo (simulasi tugas)</p>
-          <p>Username: <code>{DEMO_ADMIN.username}</code></p>
-          <p>Password: <code>{DEMO_ADMIN.password}</code></p>
-          <p className="mt-2">Login ini hanya simulasi di sisi klien dan tidak aman untuk produksi.</p>
-        </div>
+        <p className="mt-6 rounded-lg bg-slate-50 p-4 text-xs leading-relaxed text-slate-600">
+          Login memakai akun admin yang dibuat di Supabase Authentication.
+        </p>
       </div>
     </div>
   );

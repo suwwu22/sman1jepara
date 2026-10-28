@@ -12,8 +12,8 @@ function Frame({ children }) {
   const router = useRouter();
   const [drawer, setDrawer] = useState(false);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.replace("/admin/login");
   };
 
